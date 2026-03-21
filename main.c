@@ -1,3 +1,4 @@
+#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,15 +8,41 @@
 
 void run(char *op, char **operand)
 {
-	if(strcmp(op, ":") == 0){
-		printf("");
-	}else if(strcmp(op, "echo") == 0){
-		for(int i = 0; operand[i] != NULL; i ++)
-		{
-			printf("%s", operand[i]);
+	// built-in cmd
+	if(!op)
+		return;
+	else if(strcmp(op, "exit") == 0)
+		exit(0);
+
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+	char cmd[MAX_PATH + MAX_CMD_LEN];
+
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+	GetModuleFileName(NULL, cmd, MAX_PATH);
+	for(int i = strlen(cmd)-1; i >= 0; i --){
+		if(cmd[i] == '\\'){
+			cmd[i+1] = '\0';
+			break;
 		}
-		printf("\n");
 	}
+	strcat(cmd, "bin\\");
+	strcat(cmd, op);
+	strcat(cmd, ".exe ");
+	for(int i = 0; operand[i] != NULL; i ++){
+		strcat(cmd, operand[i]);
+		strcat(cmd, " ");
+	}
+
+	if(!CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)){
+		fprintf(stderr, "error: failed %s\n", op);
+		exit(-1);
+	}
+	WaitForSingleObject(pi.hProcess, INFINITE);
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
 }
 
 int main(int argc, char **argv)
@@ -61,10 +88,6 @@ int main(int argc, char **argv)
 		}
 
 		// run cmd
-		if(!op)
-			continue
-		else if(strcmp(op, "exit") == 0)
-			break;
 		run(op, operand);
 	}
 
