@@ -89,32 +89,82 @@ void run(char *op, char **operand)
 
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
-	char cmd[MAX_PATH + MAX_CMD_LEN];
+	char arg[MAX_PATH + MAX_CMD_LEN];
+	SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
+	int is_redirect_input = 0;
+	int is_redirect_output = 0;
+	int is_redirect_error = 0;
+/*
+    if (output_file) {
+        // 出力ファイルをオープン
+        HANDLE hFile = CreateFile(output_file, GENERIC_WRITE, 0, NULL, 
+                                  CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        si.hStdOutput = hFile;
+        si.hStdError = hFile; // エラーもファイルへ
+    }
+
+    // CreateProcessで子プロセスを作成
+    CreateProcess(NULL, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+    
+    // ハンドルを閉じる
+    if (output_file) CloseHandle(si.hStdOutput);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+}
+
+
+*/
+
+
 
 	ZeroMemory(&si, sizeof(si));
 	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESTDHANDLES;
 	ZeroMemory(&pi, sizeof(pi));
-	GetModuleFileName(NULL, cmd, MAX_PATH);
-	for(int i = strlen(cmd)-1; i >= 0; i --){
-		if(cmd[i] == '\\'){
-			cmd[i+1] = '\0';
+
+	// redirect
+	if(operand[0]) for(int i = 0; operand[i+1] != NULL; i ++){
+		if(strcmp(operand[i], "-0") == 0){
+			si.hStdInput = CreateFile(in_file, GENERIC_READ, FILE_SHARE_READ, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			is_redirect_input = 1;
+			i ++;
+		}else if(strcmp(operand[i], "-1") == 0){
+			si.hStdOutput = CreateFile(operand[i+1], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			is_redirect_output = 1;
+			i ++;
+		}else if(strcmp(operand[i], "-2") == 0){
+			si.hStdError = CreateFile(operand[i+1], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			is_redirect_error = 1;
+			i ++;
+		}
+	}
+
+	// set arg
+	GetModuleFileName(NULL, arg, MAX_PATH);
+	for(int i = strlen(arg)-1; i >= 0; i --){
+		if(arg[i] == '\\'){
+			arg[i+1] = '\0';
 			break;
 		}
 	}
-	strcat(cmd, "bin\\");
-	strcat(cmd, op);
-	strcat(cmd, ".exe ");
+	strcat(arg, "bin\\");
+	strcat(arg, op);
+	strcat(arg, ".exe ");
 	for(int i = 0; operand[i] != NULL; i ++){
-		strcat(cmd, operand[i]);
-		strcat(cmd, " ");
+		strcat(arg, operand[i]);
+		strcat(arg, " ");
 	}
 
-	if(!CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)){
+	if(!CreateProcess(NULL, arg, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)){
 		fprintf(stderr, "hatake: %s: command not found\n", op);
 	}
 	WaitForSingleObject(pi.hProcess, INFINITE);
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
+	if(is_redirect_input) CloseHandle(si.hStdInput);
+	if(is_redirect_output) CloseHandle(si.hStdOutput);
+	if(is_redirect_error) CloseHandle(si.hStdError);
 }
 
 int main(int argc, char **argv)
