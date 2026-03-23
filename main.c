@@ -3,16 +3,89 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_CMD_LEN 256
+#define MAX_CMD_LEN 1024
 #define MAX_OPERAND_LEN 64
 
 void run(char *op, char **operand)
 {
 	// built-in cmd
-	if(!op)
+	if(!op){
 		return;
-	else if(strcmp(op, "exit") == 0)
-		exit(0);
+	}else if(strcmp(op, ":") == 0){
+		return;
+	}else if(strcmp(op, "cd") == 0){
+		if(!SetCurrentDirectory(operand[0] ? operand[0] : getenv("USERPROFILE"))){
+			fprintf(stderr, "hatake: cd: %s: folder no find\n", operand[0] ? operand[0] : getenv("USERPROFILE"));
+		}
+		return;
+	}else if(strcmp(op, "echo") == 0){
+		for(int i = 0; operand[i]; i ++){
+			printf("%s", operand[i]);
+		}
+		printf("\n");
+		return;
+	}else if(strcmp(op, "exit") == 0){
+		exit(operand[0] ? atoi(operand[0]) : 0);
+	}else if(strcmp(op, "pwd") == 0){
+		char dir[MAX_PATH];
+		GetCurrentDirectory(MAX_PATH, dir);
+		printf("%s\n", dir);
+		return;
+	}else if(strcmp(op, "test") == 0){
+		if(operand[0] && operand[1] && operand[2]){
+			if(strcmp(operand[1], "-eq") == 0){
+				printf("%d\n", atoi(operand[0]) == atoi(operand[2]));
+			}else if(strcmp(operand[1], "-ne") == 0){
+				printf("%d\n", atoi(operand[0]) != atoi(operand[2]));
+			}else if(strcmp(operand[1], "-lt") == 0){
+				printf("%d\n", atoi(operand[0]) < atoi(operand[2]));
+			}else if(strcmp(operand[1], "-le") == 0){
+				printf("%d\n", atoi(operand[0]) <= atoi(operand[2]));
+			}else if(strcmp(operand[1], "-gt") == 0){
+				printf("%d\n", atoi(operand[0]) > atoi(operand[2]));
+			}else if(strcmp(operand[1], "-ge") == 0){
+				printf("%d\n", atoi(operand[0]) >= atoi(operand[2]));
+			}else{
+				fprintf(stderr, "hatake: test: %s: operator not found\n", operand[1]);
+				return;
+			}
+		}else{
+			perror("hatake: test: operand is not enough");
+		}
+		return;
+	}else if(strcmp(op, "type") == 0){
+		for(int i=0; operand[i]; i ++){
+			if(
+				strcmp(operand[i], ":") == 0 ||
+				strcmp(operand[i], "cd") == 0 ||
+				strcmp(operand[i], "echo") == 0 ||
+				strcmp(operand[i], "exit") == 0 ||
+				strcmp(operand[i], "pwd") == 0 ||
+				strcmp(operand[i], "test") == 0 ||
+				strcmp(operand[i], "type") == 0
+			){
+				printf("%s is a shell builtin\n", operand[i]);
+			}else{
+				char path[MAX_PATH];
+				GetModuleFileName(NULL, path, MAX_PATH);
+				for(int i = strlen(path)-1; i >= 0; i --){
+					if(path[i] == '\\'){
+						path[i+1] = '\0';
+						break;
+					}
+				}
+				strcat(path, "bin\\");
+				strcat(path, op);
+				strcat(path, ".exe");
+				FILE *fp = fopen(path, "r");
+				if(fp){
+					printf("%s : %s\n", operand[i], path);
+				}else{
+					printf("%s not found\n", operand[i]);
+				}
+			}
+		}
+	}
 
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
@@ -37,8 +110,7 @@ void run(char *op, char **operand)
 	}
 
 	if(!CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)){
-		fprintf(stderr, "error: failed %s\n", op);
-		exit(-1);
+		fprintf(stderr, "hatake: %s: command not found\n", op);
 	}
 	WaitForSingleObject(pi.hProcess, INFINITE);
 	CloseHandle(pi.hProcess);
@@ -48,12 +120,15 @@ void run(char *op, char **operand)
 int main(int argc, char **argv)
 {
 	char cmd[MAX_CMD_LEN];
+	char pwd[MAX_PATH];
 	char *op;
 	char *operand[MAX_OPERAND_LEN];
 
+	SetCurrentDirectory(getenv("USERPROFILE"));
+
 	if(argc > 1){
 		if(argc >= MAX_OPERAND_LEN){
-			fprintf(stderr, "error: intpu too long operator\n");
+			perror("hatake: fatal: command is failure");
 			return -1;
 		}
 		op = argv[1];
@@ -68,9 +143,13 @@ int main(int argc, char **argv)
 
 	while(1){
 		// input cmd
-		printf("hatake $ ");
-		if(fgets(cmd, sizeof(cmd), stdin) == NULL){
-			fprintf(stderr, "error: input too long cmd\n");
+		if(GetCurrentDirectory(MAX_PATH, pwd)){
+			printf("%s $ ", pwd);
+		}else{
+			printf(" $ ");
+		}
+		if(!fgets(cmd, sizeof(cmd), stdin)){
+			perror("hatake: fatal: command is failure");
 			continue;
 		}
 
@@ -79,7 +158,7 @@ int main(int argc, char **argv)
 		int i;
 		for(i = 0; 1; i ++){
 			if(i >= MAX_OPERAND_LEN){
-				fprintf(stderr, "error: input too long arg\n");
+				perror("hatake: fatal: command is failure");
 				continue;
 			}
 			if((operand[i] = strtok(NULL, " \t\n\r")) == NULL){
