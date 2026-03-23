@@ -5,7 +5,7 @@
 int main(int argc, char **operand)
 {
     if(!operand[1]){
-        perror("hatake: rm: operand is not enough");
+        perror("hatake: rm: missing operand");
         return -1;
     }else if(remove(operand[1]) != 0){
         fprintf(stderr, "hatake: rm: %s: file not found\n", operand[1]);
