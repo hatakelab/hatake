@@ -1,0 +1,2 @@
+# hatake
+CUI text editor
